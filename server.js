@@ -20,8 +20,10 @@ function loadboard(path)
 
 function saveboard(id,board)
 {
-	var path="boards/"+id+".go";
+	var path='boards/'+id+'.go';
 	var s;
+	if(!fs.existsSync('boards'))
+		fs.mkdirSync('boards', 0766, function(err){ if(err) console.log(err); });
 	try{ s=JSON.stringify(board); } catch(err){ console.log('save json: '+err); }
 	//console.log('save '+s+'\n to '+path+'\n');
 	if(s) fs.writeFile(path,s,{encoding:'utf8'}, function(err) { if(err) console.log('save file: '+err); });
