@@ -12,7 +12,7 @@ All files copyright [Kyle Finn](http://whoiskylefinn.com) 2014
 
 2. Run server with `nodejs server.js`
 
-3. Adapt client from [example client](http://whoiskylefinn.com/jsfun/go.html) to point to your server IP
+3. Adapt [example client](http://whoiskylefinn.com/jsfun/go.html) to point to your server IP
 
 # Notes
 
