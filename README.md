@@ -18,8 +18,6 @@ Open go.html in a browser
 
 # Notes
 
-server.js does not yet enforce ko rule.
-
 go.html/main.css were ripped out of my website and are not properly generic- it's meant more as an example client.
 
 # More notes
@@ -35,7 +33,7 @@ The server cache will reload games from the file-system as needed.
 
 The implementation is based on AGA rules.
 
-The server prevents suicide moves, counts kills, permanently logs every move, adds a pass move to opponent's kill count, and adds a white pass move if black plays last.
+The server prevents suicide moves, enforces ko rule, counts kills, permanently logs every move, adds pass moves to opponent's kill count, and adds a white pass move if black plays last.
 
 After two consecutive passes, the clients are allowed to mark some groups as dead. If the white and black team submissions match, the game ends, else the game resumes while indicating areas of dispute.
 
