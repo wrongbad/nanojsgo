@@ -140,16 +140,16 @@ function checkko(id,board,b)
 
 function trymove(id,b,i,v)
 {
-	if(b.pass>=2) return false;
-	if(b.wturn&&v!='w' || !b.wturn&&v!='b') return false;
-	if(!(i>=0 && i<b.size*b.size)) return false;
-	if(b.board[i]!=' ') return false;
+	if(b.pass>=2) return 'over';
+	if(b.wturn&&v!='w' || !b.wturn&&v!='b') return 'turn';
+	if(!(i>=0 && i<b.size*b.size)) return 'bounds';
+	if(b.board[i]!=' ') return 'collision';
 	
 	newb=b.board.split('');
 	newb[i]=v;
 	var pts=cleardead(newb,b.size,b.wturn?'bw':'wb');
-	if(pts<0) return false;
-	if(checkko(id,newb,b)) return false;
+	if(pts<0) return 'suicide';
+	if(checkko(id,newb,b)) return 'ko';
 	
 	if(b.wturn) b.wkills+=pts;
 	if(b.bturn) b.bkills+=pts;
@@ -165,7 +165,7 @@ function trymove(id,b,i,v)
 	if(b.log.length>4e4) b.log=['overflow'];
 	b.log.push({i:i,v:v});
 	if(boardHashes[id]) boardHashes[id].push(fnv1a(b.board+(b.wturn?'w':'b')));
-	return true;
+	return undefined;
 }
 
 app.listen(1369);
@@ -177,12 +177,12 @@ io.on('connection', function(socket) {
 		socket.emit('game', {game: b});
 	});
 	socket.on('put', function(data) {
-		 var id=clean(data.id);
+		var id=clean(data.id);
 		if(!id) return;
 		var b=getboard(socket,id);
-		trymove(id,b,data.i,data.v);
+		var err=trymove(id,b,data.i,data.v);
 		saveboard(id,b);
-		io.to(id).emit('game', {game: b});
+		io.to(id).emit('game', {game: b, err:err});
 	});
 	socket.on('pass', function(data) {
 		var id=clean(data.id);
