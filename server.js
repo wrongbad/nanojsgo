@@ -3,11 +3,13 @@ var io = require('socket.io')(app);
 var fs = require('fs');
 
 var boards = {};
+var boardHashes = {};
 for(var newboard="";newboard.length<19*19;newboard+=" ");
 
 function handler(req, res) { res.writeHead(200); res.end("alive"); }
-function isstr(s) { return s && s.replace=="".replace }
+function isstr(s) { return typeof s == 'string' || s instanceof String }
 function clean(s) { return isstr(s) ? s.replace(/[^0-9A-Za-z\-]/g,"").substr(0,20) : ""; }
+function fnv1a(s) { for(var a=0x811c9dc5,i=0;i<s.length;i++) {a^=s.charCodeAt(i);a=a*0x193+(a<<24);} return a>>>0; }
 
 function loadboard(path)
 {
@@ -87,7 +89,52 @@ function cleardead(b,s,ord)
 	return pts;
 }
 
-function trymove(b,i,v)
+function checkko(id,b)
+{
+	if(b.log.length<2) return;
+	var ko=0;
+	var state=b.board+(b.wturn?'w':'b');
+	var ch=fnv1a(state);
+	
+	if(!boardHashes[id])
+	{
+		sim();
+	}
+	else
+	{
+		for(var i=0;i<boardHashes[id].length;i++)
+		{
+			if(ch==boardHashes[id][i])
+			{
+				sim();
+				break;
+			}
+		}
+	}
+	function sim()
+	{
+		var t='b';
+		s=(newboard+t).split('');
+		boardHashes[id]=[];
+		for(var i=0;i<b.log.length;i++)
+		{
+			if(b.log[i].i>=0)
+				s[b.log[i].i]=b.log[i].v;
+			if(t!=b.log[i].v)
+				console.log('log turn discrepency');
+			cleardead(s,b.size,t?'bw':'wb');
+			t=t=='w'?'b':'w';
+			s[19*19]=t;
+			str=s.join('');
+			if(str==state) ko=1;
+			boardHashes[id][i]=fnv1a(str);
+		}
+	}
+	
+	return ko;
+}
+
+function trymove(id,b,i,v)
 {
 	if(b.pass>=2) return false;
 	if(b.wturn&&v!='w' || !b.wturn&&v!='b') return false;
@@ -98,6 +145,8 @@ function trymove(b,i,v)
 	newb[i]=v;
 	var pts=cleardead(newb,b.size,b.wturn?'bw':'wb');
 	if(pts<0) return false;
+	if(checkko(b))
+	
 	if(b.wturn) b.wkills+=pts;
 	if(b.bturn) b.bkills+=pts;
 	b.board=newb.join('');
@@ -111,6 +160,7 @@ function trymove(b,i,v)
 	}
 	if(b.log.length>4e4) b.log=['overflow'];
 	b.log.push({i:i,v:v});
+	boardHashes.push(fnv1a(b.board+(b.wturn?'w':'b')));
 	return true;
 }
 
@@ -126,7 +176,7 @@ io.on('connection', function(socket) {
 		 var id=clean(data.id);
 		if(!id) return;
 		var b=getboard(socket,id);
-		trymove(b,data.i,data.v);
+		trymove(id,b,data.i,data.v);
 		saveboard(id,b);
 		io.to(id).emit('game', {game: b});
 	});
@@ -141,6 +191,7 @@ io.on('connection', function(socket) {
 			b.wturn=!b.wturn;
 			b.pass++;
 			b.log.push({pass:1,v:v});
+			boardHashes.push(fnv1a(b.board+(b.wturn?'w':'b')));
 		}
 		saveboard(id,b);
 		io.to(id).emit('game', {game: b});
@@ -159,7 +210,6 @@ io.on('connection', function(socket) {
 		{
 			if(b.wmark!=b.bmark)
 			{
-				b.pass=0;
 				var q=b.wmark.split('');
 				for(var i=0;i<q.length;i++)
 					if(q[i]!=b.bmark[i])
