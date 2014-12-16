@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Whois Kyle Finn</title>
+	<link rel="stylesheet" type="text/css" href="main.css">
+	<style>
+	#cc canvas {
+		width: 512px;
+		height: 512px;
+		display: inline-block;
+		background: #ffffff;
+		box-shadow: 1px 1px 6px #888888;
+	}
+	</style>
+</head>
+<body style="width:100%">
+	<div id="cc">
+		<div id="toplinks"><a href="../">home</a></div>
+		<div class="title">share url and play go</div>
+		<div id="setteam" style="display:inline-block;">
+			<a href="javascript:setteam('black');" style="margin:5px;">black</a>
+			<a href="javascript:setteam('white');" style="margin:5px;">white</a>
+			<a href="javascript:setteam('spectator');" style="margin:5px;">spectate</a>
+		</div>
+		<div id="gamehead" style="display:none;">
+			<div id="team" style="display:inline-block;margin:5px;">black</div>
+			<div style="display:inline-block;margin:5px;">
+				<div id="tturn" style="display:inline-block;">your turn </div>
+				<a id="aturn" href="javascript:pass();">pass</a>
+			</div>
+			<div id="dead" style="display:none; margin:5px;"></div>
+			<div id="area" style="display:inline-block; margin:5px;"></div>
+		</div>
+		<canvas id="c1" width="512px" height="512px"></canvas>
+		<div class="links" style="margin-bottom: 50px;">
+			<a href="#19">new 19</a>
+			<a href="#13">new 13</a>
+			<a href="#9">new 9</a>
+			<a href="javascript:about();">about</a>
+		</div>
+		<div id="about" style="display:none; text-align:left;">
+			<p>This is an ad-hoc go service for setting up games with people you know.
+			Every unique url represents a game. Anyone with that url can play as either color.
+			Create a new url, share it with your partner, pick colors, then play.</p>
+			<p>Currently, ko is not automatically enforced.</p>
+			<p>You may send bug reports to unnamed223 yahoo com with "whoiskylefinn" in the subject</p>
+			<p>Thanks to Saul Pwanson for helpful discussions about the game and network programming.</p>
+		</div>
+	</div>
+	
+<!--	<script src="../socket.io.js"></script>-->
+	<script src="https://cdn.socket.io/socket.io-1.0.0.js"></script>
+	<script>
+	var socket;
+	var newest=-1;
+	var game={};
+	var mark='';
+	var team='';
+	var group=[];
+	var c1=document.getElementById("c1");
+	function draw()
+	{
+		var s=game.size;
+		var b=game.board;
+		var ctx=c1.getContext('2d');
+		var colors=['#ffffff','#000000'];
+		var w=c1.width;
+		var s1=w/(s+1);
+		ctx.fillStyle='#ddcc88';
+		ctx.fillRect(0,0,w,w);
+		
+		if(!game.board) return;
+		
+		ctx.lineWidth=0.05*s1;
+		ctx.strokeStyle='#000000';
+		ctx.beginPath();
+		for(var i=0;i<s;i++)
+		{
+			var x=(i+1)*s1;
+			ctx.moveTo(s1, x);
+			ctx.lineTo(s*s1, x);
+			ctx.moveTo(x, s1);
+			ctx.lineTo(x, s*s1);
+		}
+		ctx.stroke();
+		ctx.lineWidth=0.1*s1;
+		ctx.textAlign="center";
+		
+		var passcol=newest=='b'?colors[1]:newest=='w'?colors[0]:undefined;
+		if(passcol)
+		{
+			ctx.fillStyle=passcol;
+			ctx.font=(0.5*s1|0)+"px Helvetica";
+			ctx.fillText("pass",w/2,(s+0.7)*s1);
+		}
+		ctx.font=(0.6*s1|0)+"px Helvetica";
+		for(var i=0;i<s;i++)
+		{
+			for(var j=0;j<s;j++)
+			{
+				var x=(i+1)*s1;
+				var y=(j+1)*s1;
+				if(s==19 && (i%6==3&&j%6==3)
+				   ||s==13 && (i%6==3&&j%6==3)
+				   ||s==9 && (i%4==2&&j%4==2))
+				   
+				{
+					ctx.fillStyle='#000000';
+					ctx.beginPath();
+					ctx.arc(x, y, 0.12*s1, 0, 2*Math.PI, false);
+					ctx.fill();
+				}
+				if(b[i+j*s]!=' ')
+				{
+					var col=b[i+j*s]=='w'?0:1;
+					ctx.fillStyle=colors[col];
+					ctx.beginPath();
+					ctx.arc(x, y, 0.48*s1, 0, 2*Math.PI, false);
+					ctx.fill();
+					
+					if(mark[i+j*s]=='d')
+					{
+						ctx.strokeStyle=colors[1-col];
+						ctx.beginPath();
+						ctx.moveTo(x-0.2*s1,y-0.2*s1);
+						ctx.lineTo(x+0.2*s1,y+0.2*s1);
+						ctx.moveTo(x-0.2*s1,y+0.2*s1);
+						ctx.lineTo(x+0.2*s1,y-0.2*s1);
+						ctx.stroke();
+					}
+					else if(mark[i+j*s]=='?')
+					{
+						ctx.fillStyle=colors[1-col];
+						ctx.fillText("?",x,y+0.25*s1);
+					}
+					else if(i+j*s==newest)
+					{
+						ctx.fillStyle=colors[1-col];
+						ctx.beginPath();
+						ctx.arc(x, y, 0.1*s1, 0, 2*Math.PI, false);
+						ctx.fill();
+					}
+				}
+			}
+		}
+	}
+	function checkHash()
+	{
+		var hash=window.location.hash;
+		hash=hash||'#19';
+		if(hash.length<6)
+		{
+			var rand='';
+			var set='abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+			for(var i=0;i<12;i++) rand+=set[Math.random()*62|0];
+			history.replaceState('','',hash+'-'+rand);
+		}
+		mark='';
+		refresh();
+	}
+	function initsocket()
+	{
+		socket=io('http://'+server-ip-goes-here+':1369');
+		socket.on('game', gotboard);
+		socket.on('connect', refresh);
+		socket.on('error', chturn);
+		socket.on('disconnect', chturn);
+		socket.on('reconnect_attempt', chturn);
+		socket.on('reconnect_error', chturn);
+		socket.on('reconnect_failed', chturn);
+	}
+	function refresh()
+	{
+		if(!socket)
+			initsocket();
+		else if(!socket.connected)
+			socket.connect();
+		else
+			socket.emit('getboard', {id: window.location.hash});
+	}
+	function gotboard(data)
+	{
+		if(data.game)
+		{
+			game=data.game;
+			var last=game.log[game.log.length-1];
+			if(last && last.pass) newest=last.v;
+			else if(last && last.i) newest=last.i;
+			findgroups();
+			chturn();
+			draw();
+			count();
+		}
+	}
+	function setteam(t)
+	{
+		team = t;
+		document.getElementById('team').textContent=team;
+		chturn();
+	}
+	function debouncehref(a,href)
+	{
+		a.href='';
+		setTimeout(function(){a.href=href;},1000);
+	}
+	function chturn()
+	{
+		var s=game.size;
+		var t=document.getElementById('tturn');
+		var a=document.getElementById('aturn');
+		var gh=document.getElementById('gamehead');
+		var st=document.getElementById('setteam');
+		var disp=['none','inline-block'];
+		var hud=game.mark||team?1:0;
+		gh.style.display=disp[hud];
+		st.style.display=disp[1-hud];
+		
+		if(!socket.connected)
+		{
+			t.textContent='disconnected';
+			a.textContent='retry';
+			a.href='javascript:refresh();';
+		}
+		else if(game.mark)
+		{
+			t.textContent='game ended';
+			a.textContent='';
+			a.href='javascript:refresh();';
+			mark=game.mark;
+		}
+		else if(team[0]!='w' && team[0]!='b')
+		{
+			t.textContent='';
+			a.textContent='';
+			a.href='javascript:refresh();';
+			mark=game.qmark||'';
+		}
+		else if(game.pass==2)
+		{
+			var mmark=team[0]=='w'?game.wmark:game.bmark;
+			if(!mmark)
+			{
+				t.textContent='select dead';
+				a.textContent='done';
+				debouncehref(a,'javascript:markdead();');
+				for(mark='';mark.length<s*s;mark+=' ');
+			}
+			else
+			{
+				t.textContent='waiting';
+				a.textContent='';
+				a.href='javascript:refresh();';
+				mark=mmark;
+			}
+		}
+		else
+		{
+			if(game.wturn == (team[0]=='w'))
+			{
+				t.textContent='your turn';
+				a.textContent='pass';
+				debouncehref(a,'javascript:pass();');
+				mark=game.qmark||'';
+			}
+			else
+			{
+				t.textContent='waiting';
+				a.textContent='';
+				a.href='javascript:refresh();';
+				mark=game.qmark||'';
+			}
+		}
+	}
+	function findgroups()
+	{
+		if(!game.board) return;
+		var s=game.size;
+		var b=game.board;
+		var g=new Int16Array(s*s);
+		for(var i=0;i<s*s;i++) g[i]=i;
+		for(var i=0;i<s*s;i++) if(b[i]!=' ')
+		{
+			if(i%s>0 && b[i-1]==b[i]) g[i]=g[i-1];
+			if(i/s>0 && b[i-s]==b[i]) merge(g[i],g[i-s])
+		}
+		function merge(g1,g2)
+		{
+			if(g1==g2) return;
+			for(var j=0;j<s*s;j++) if(g[j]==g1) g[j]=g2;
+		}
+		group=g;
+	}
+	function count()
+	{
+		if(!game.board) return;
+		var s=game.size;
+		var b=game.board;
+		var wa=0,ba=0;
+		var del=1;
+		var c=new Int8Array(s*s);
+		for(var i=0;i<s*s;i++)
+		{
+			if(mark[i]=='d') continue;
+			else if(b[i]=='w') c[i]=10;
+			else if(b[i]=='b') c[i]=5;
+		}
+		while(del)
+		{
+			del=0;
+			for(var i=0;i<s*s;i++)
+			{
+				var cp=c[i];
+				if(i%s>0 && (c[i]&3)==0) c[i]|=c[i-1]&12;
+				if(i/s>0 && (c[i]&3)==0) c[i]|=c[i-s]&12;
+				del=del||(c[i]!=cp);
+			}
+			for(var i=s*s-1;i>=0;i--)
+			{
+				var cp=c[i];
+				if(i%s<s-1 && (c[i]&3)==0) c[i]|=c[i+1]&12;
+				if(i/s<s-1 && (c[i]&3)==0) c[i]|=c[i+s]&12;
+				del=del||(c[i]!=cp);
+			}
+		}
+		for(var i=0;i<s*s;i++)
+		{
+			if((c[i]&12)==8) wa++;
+			else if((c[i]&12)==4) ba++;
+		}
+		var wd=game.wkills;
+		var bd=game.bkills;
+		wd=wd||0;
+		bd=bd||0;
+		document.getElementById('dead').textContent='dead: w'+bd+' b'+wd;
+		document.getElementById('area').textContent='area: w'+wa+' b'+ba;
+	}
+	function pass()
+	{
+		socket.emit('pass', {id:window.location.hash, v:team[0]});
+	}
+	function markdead()
+	{
+		socket.emit('markdead', {id:window.location.hash, v:team[0], mark:mark});
+	}
+	function mousedown(e)
+	{
+		if(!game.board || (team[0]!='b'&&team[0]!='w')) return;
+		var s=game.size;
+		var x=Math.round(e.offsetX*(s+1)/c1.width);
+		var y=Math.round(e.offsetY*(s+1)/c1.height);
+		if(x>0&&y>0&&x<=s&&y<=s)
+		{
+			var i=x+y*s-s-1;
+			if(game.pass==2)
+			{
+				if(game.board[i]!=' ' && (team[0]=='w'&&!game.wmark || team[0]=='b'&&!game.bmark))
+				{
+					var m=mark.split('');
+					var newmark=m[i]==' '?'d':' ';
+					for(var j=0;j<s*s;j++) if(group[j]==group[i]) m[j]=newmark;
+					mark=m.join('');
+					draw();
+				}
+			}
+			else
+			{
+				socket.emit('put', {id:window.location.hash, i:i, v:team[0]});
+			}
+		}
+	}
+	function about()
+	{
+		var about=document.getElementById('about').style;
+		about.display=about.display=='none'?'inline-block':'none';
+	}
+	
+	window.onhashchange=checkHash;
+	checkHash();
+	draw();
+	c1.addEventListener('mousedown', mousedown);
+	</script>
+</body>
+</html>
+
