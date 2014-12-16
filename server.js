@@ -89,13 +89,12 @@ function cleardead(b,s,ord)
 	return pts;
 }
 
-function checkko(id,b)
+function checkko(id,board,b)
 {
-	if(b.log.length<2) return;
+	if(b.log.length<2) return 0;
 	var ko=0;
-	var state=b.board+(b.wturn?'w':'b');
+	var state=board.join('')+(b.wturn?'b':'w');
 	var ch=fnv1a(state);
-	
 	if(!boardHashes[id])
 	{
 		sim();
@@ -122,7 +121,7 @@ function checkko(id,b)
 				s[b.log[i].i]=b.log[i].v;
 			if(t!=b.log[i].v)
 				console.log('log turn discrepency');
-			cleardead(s,b.size,t?'bw':'wb');
+			cleardead(s,b.size,t=='w'?'bw':'wb');
 			t=t=='w'?'b':'w';
 			s[19*19]=t;
 			str=s.join('');
@@ -130,7 +129,12 @@ function checkko(id,b)
 			boardHashes[id][i]=fnv1a(str);
 		}
 	}
-	
+	/*
+	for(var i=0;i<boardHashes[id].length;i++)
+	console.log(i+' '+boardHashes[id][i]);
+	console.log(b.log.length+' '+ch+' '+state);
+	if(ko) console.log('ko.');
+	 */
 	return ko;
 }
 
@@ -145,7 +149,7 @@ function trymove(id,b,i,v)
 	newb[i]=v;
 	var pts=cleardead(newb,b.size,b.wturn?'bw':'wb');
 	if(pts<0) return false;
-	if(checkko(b))
+	if(checkko(id,newb,b)) return false;
 	
 	if(b.wturn) b.wkills+=pts;
 	if(b.bturn) b.bkills+=pts;
@@ -160,7 +164,7 @@ function trymove(id,b,i,v)
 	}
 	if(b.log.length>4e4) b.log=['overflow'];
 	b.log.push({i:i,v:v});
-	boardHashes.push(fnv1a(b.board+(b.wturn?'w':'b')));
+	if(boardHashes[id]) boardHashes[id].push(fnv1a(b.board+(b.wturn?'w':'b')));
 	return true;
 }
 
@@ -191,7 +195,7 @@ io.on('connection', function(socket) {
 			b.wturn=!b.wturn;
 			b.pass++;
 			b.log.push({pass:1,v:v});
-			boardHashes.push(fnv1a(b.board+(b.wturn?'w':'b')));
+			if(boardHashes[id]) boardHashes[id].push(fnv1a(b.board+(b.wturn?'w':'b')));
 		}
 		saveboard(id,b);
 		io.to(id).emit('game', {game: b});
