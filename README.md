@@ -12,13 +12,11 @@ All files copyright [Kyle Finn](http://whoiskylefinn.com) 2014
 
 2. Run server with `nodejs server.js`
 
-3. In go.html, change `server-ip-goes-here` to the IP address of your server.
-
-4. Open go.html in a browser
+3. Adapt client from [example client](http://whoiskylefinn.com/jsfun/go.html) to point to your server IP
 
 # Notes
 
-go.html and main.css were ripped out of my website and are not properly generic--it's meant more as an example client.
+Client code removed for now so I don't have to maintain two separate versions. In the future it may be properly modular and I'll be able to add the core components back.
 
 # More notes
 
