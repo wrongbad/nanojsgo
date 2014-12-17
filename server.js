@@ -179,7 +179,7 @@ function trymove(game,i,v)
 function trypass(game,v)
 {
 	if(game.turn!==v) return 'turn';
-	if(pass) return 'turn';
+	if(game.pass>=2) return 'turn';
 	
 	game.turn=='w' ? game.bkills++ : game.wkills++;
 	game.moved({pass:1,v:game.turn});
@@ -193,10 +193,10 @@ function trymark(game,v,mark)
 	if(!isstr(mark) || mark.length!=game.size*game.size) return 'invalid';
 	if(game.pass!=2) return 'turn';
 	
-	if(data.v=='w' && !game.wmark)
-		game.wmark=data.mark;
-	else if(data.v=='b' && !game.bmark)
-		game.bmark=data.mark;
+	if(v=='w' && !game.wmark)
+		game.wmark=mark;
+	else if(v=='b' && !game.bmark)
+		game.bmark=mark;
 	else
 		return 'turn';
 	if(game.wmark && game.bmark)
@@ -249,7 +249,7 @@ io.on('connection', function(socket) {
 		var id=safestr(data.id);
 		if(!id) return;
 		getgame(socket,id,function(game) {
-			if(!b) return;
+			if(!game) return;
 			var err=trypass(game,data.v);
 			savegame(id,game);
 			io.to(id).emit('game', {game:get(game,sendkeys), err:err});	  
