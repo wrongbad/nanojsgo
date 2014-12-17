@@ -201,20 +201,24 @@ function trymark(game,v,mark)
 		return 'turn';
 	if(game.wmark && game.bmark)
 	{
-		if(game.wmark!=game.bmark)
+		var valid=1;
+		for(var i=0;i<game.wmark.length;i++)
+			if(game.wmark[i]!='b' && game.wmark[i]!='w')
+				valid=0;
+		if(game.wmark==game.bmark && valid)
+		{
+			game.mark=game.wmark;
+			if(game.turn=='w') 
+				game.bkills++;
+			delete game.turn;
+		}
+		else
 		{
 			var newq=game.wmark.split('');
 			for(var i in newq)
 				if(game.bmark[i]!=game.wmark[i])
 					newq[i]='?';
 			game.qmark=newq.join('');
-		}
-		else
-		{
-			game.mark=game.wmark;
-			if(game.turn=='w') 
-				game.bkills++;
-			delete game.turn;
 		}
 		game.pass=0;
 		delete game.bmark;
