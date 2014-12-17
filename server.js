@@ -184,6 +184,8 @@ function trypass(game,v)
 	game.turn=='w' ? game.bkills++ : game.wkills++;
 	game.moved({pass:1,v:game.turn});
 	game.pass++;
+	if(game.pass==2)
+		delete game.qmark;
 	return undefined;
 }
 
@@ -203,7 +205,7 @@ function trymark(game,v,mark)
 	{
 		var valid=1;
 		for(var i=0;i<game.wmark.length;i++)
-			if(game.wmark[i]!='b' && game.wmark[i]!='w')
+			if('bw '.indexOf(game.wmark[i])<0)
 				valid=0;
 		if(game.wmark==game.bmark && valid)
 		{
@@ -216,7 +218,7 @@ function trymark(game,v,mark)
 		{
 			var newq=game.wmark.split('');
 			for(var i in newq)
-				if(game.bmark[i]!=game.wmark[i])
+				if(game.bmark[i]!=game.wmark[i] || 'bw '.indexOf(game.wmark[i])<0)
 					newq[i]='?';
 			game.qmark=newq.join('');
 		}
