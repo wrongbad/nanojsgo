@@ -10,12 +10,20 @@ function get(o,k) { for(var i=0,o2={};i<k.length;i++) { o2[k[i]]=o[k[i]]; } retu
 function errpre(pre) { return function(err){ if(err) console.log(pre+'::'+err); }; }
 function tojson(o) { try { return JSON.stringify(o); } catch(err) { console.log('tojson::'+err+' '+o); return null; } }
 function fromjson(o) { try { return JSON.parse(o); } catch(err) { console.log('fromjson::'+err+' '+o); return null; } }
-function opp(t) { return t=='w'?'b':'w'; }
+function setroom(socket,room) { for(var r in socket.rooms) { socket.leave(r); } socket.join(room); }
+function opp(t) { return t==='w'?'b':'w'; }
 
 for(var emptyboard='';emptyboard.length<19*19;emptyboard+=' ');
 function gameObj(size)
 {
-	this.board=emptyboard,this.size=size,this.log=[],this.turn='b',this.wkills=0,this.bkills=0,this.pass=0,this.version=1;
+	this.board=emptyboard;
+	this.size=size;
+	this.log=[];
+	this.turn='b';
+	this.wkills=0;
+	this.bkills=0;
+	this.pass=0;
+	this.version=2;
 	this.moved=moved;
 }
 function moved(o) { 
@@ -28,12 +36,24 @@ function moved(o) {
 };
 
 var migrations={
-	undefined:function(game) { migrations[0](game); },
-	0:function(game) { game.turn=game.wturn?'w':'b'; migrations[1](game); },
-	1:function(game) { game.version=1; }
+	undefined:function(game) { 
+		migrations[0](game);
+	},
+	0:function(game) { 
+		game.turn=game.wturn?'w':'b';
+		migrations[1](game); 
+	},
+	1:function(game) { 
+		if(game.mark) delete game.turn;
+		game.mark=game.mark||game.qmark;
+		migrations[2](game);
+	},
+	2:function(game) { 
+		game.version=2;
+	}
 };
 
-var sendkeys=['board','lmove','size','turn','wkills','bkills','pass','bmark','wmark','qmark','mark','version'];
+var sendkeys=['board','lmove','size','turn','wkills','bkills','pass','bmark','wmark','mark','version'];
 var savekeys=sendkeys.concat('log');
 var games={};
 
@@ -44,8 +64,8 @@ function loadgame(id,loaded)
 		if(err) { loaded(0); return; }
 		var game=fromjson(data);
 		if(!game) { loaded(0); return; }
-		game.moved=moved;
 		migrations[game.version](game);
+		game.moved=moved;
 		loaded(game);
 	});
 }
@@ -67,80 +87,82 @@ function getgame(socket,id,callback)
 		loadgame(id,loaded);
 	function loaded(game)
 	{
-		game=game||new gameObj(id.indexOf('9-')==0 ? 9 : id.indexOf('13-')==0 ? 13 : 19);
-		game.read=new Date().getTime();
-		for(var r in socket.rooms)
-			socket.leave(r);
-		socket.join(id);
-		games[id]=game;
-		callback(game);
+		games[id]=game||new gameObj(id.indexOf('9-')==0 ? 9 : id.indexOf('13-')==0 ? 13 : 19);
+		games[id].read=new Date().getTime();
+		setroom(socket,id);
+		callback(games[id]);
 	}
 }
 
-function grouplib(b,s,g,lib)
+function groupcount(boardA,size,groups,liberties)
 {
+	var s=size;
 	for(var i=0;i<s*s;i++)
-		lib[i]=0,g[i]=i;
-	for(var i=0;i<s*s;i++) if(b[i]!=' ')
 	{
-		if(i%s>0 && b[i-1]==b[i]) g[i]=g[i-1];
-		if(i/s>0 && b[i-s]==b[i]) merge(g[i],g[i-s])
-		if(i%s>0 && b[i-1]==' ') lib[g[i]]++;
-		if(i/s>0 && b[i-s]==' ') lib[g[i]]++;
-		if(i%s<s-1 && b[i+1]==' ') lib[g[i]]++;
-		if(i/s<s-1 && b[i+s]==' ') lib[g[i]]++;
+		liberties[i]=0
+		groups[i]=i;
 	}
-	function merge(g1,g2)
+	for(var i=0;i<s*s;i++)
 	{
-		if(g1==g2) return;
-		lib[g2]+=lib[g1];
-		for(var i in g)
-			if(g[i]==g1)
-				g[i]=g2;
+		if(boardA[i]!=' ')
+		{
+			if(i%s>0 && boardA[i-1]==boardA[i]) groups[i]=groups[i-1];
+			if(i/s>0 && boardA[i-s]==boardA[i]) merge(groups[i],groups[i-s]);
+			if(i%s>0 && boardA[i-1]==' ') liberties[groups[i]]++;
+			if(i/s>0 && boardA[i-s]==' ') liberties[groups[i]]++;
+			if(i%s<s-1 && boardA[i+1]==' ') liberties[groups[i]]++;
+			if(i/s<s-1 && boardA[i+s]==' ') liberties[groups[i]]++;
+		}
+	}
+	function merge(groupFrom,groupTo)
+	{
+		if(groupFrom==groupTo) return;
+		liberties[groupTo]+=liberties[groupFrom];
+		for(var i=0;i<s*s;i++)
+			if(groups[i]==groupFrom)
+				groups[i]=groupTo;
 	}	
 }
 
 var g_static=new Int16Array(19*19);
 var lib_static=new Int8Array(19*19);
-function cleardead(game,b,t)
+function cleardead(boardA,size,turn)
 {
-	var s=game.size;
-	var ord=t=='w'?'bw':'wb';
-	var g=g_static;
-	var lib=lib_static;
-	grouplib(b,s,g,lib);
-	var pts=0;
-	for(var o=0;o<2;o++)
+	var groups=g_static;
+	var liberties=lib_static;
+	groupcount(boardA,size,groups,liberties);
+	var points=0;
+	for(var o in [1,-1])
 	{
-		for(var i=0;i<s*s;i++)
-			if(b[i]==ord[o] && lib[g[i]]==0)
-				 b[i]=' ',pts++;
-		if(pts>0)
-			return pts*(1-2*o);
+		turn=opp(turn);
+		for(var i=0;i<size*size;i++)
+			if(boardA[i]==turn && liberties[groups[i]]==0)
+				 boardA[i]=' ',points++;
+		if(points>0)
+			return points*o;
 	}
 	return 0;
 }
 
-function checkko(game,b)
+function checkko(game,boardA)
 {
-	var l=game.log;
-	if(l.length<2) return 0;
+	if(game.log.length<2) return 0;
 	var ko=0;
-	var board=b.join('')+opp(game.turn);
+	var board=boardA.join('')+opp(game.turn);
 	var hash=fnv1a(board);
 	if(!game.hashes || contains(game.hashes,hash))
 	{
 		var turn2='b';
-		var b2=(emptyboard+turn2).split('');
+		var boardA2=(emptyboard+turn2).split('');
 		game.hashes=game.hashes||[];
-		for(var i=0;i<l.length;i++)
+		for(var i=0;i<game.log.length;i++)
 		{
-			if(l[i].i>=0)
-				b2[l[i].i]=l[i].v;
-			cleardead(game,b2,turn2);
+			if(game.log[i].i>=0)
+				boardA2[game.log[i].i]=game.log[i].v;
+			cleardead(boardA2,game.size,turn2);
 			turn2=opp(turn2);
-			b2[19*19]=turn2;
-			var board2=b2.join('');
+			boardA2[19*19]=turn2;
+			var board2=boardA2.join('');
 			ko=ko||(board2==board);
 			game.hashes[i]=game.hashes[i]||fnv1a(board2);
 		}
@@ -148,79 +170,73 @@ function checkko(game,b)
 	return ko;
 }
 
-function trymove(game,i,v)
+function trymove(game,location,team)
 {
-	if(game.pass>=2) return 'over';
-	if(game.turn!==v) return 'turn';
-	if(!(i>=0 && i<game.size*game.size)) return 'bounds';
-	if(game.board[i]!=' ') return 'collision';
+	if(team!=='w' && team!=='b') return 'invalid';
+	if(game.turn!==team) return 'turn';
+	if(game.pass>=2) return 'turn';
+	if(!(location>=0 && location<game.size*game.size)) return 'bounds';
+	if(game.board[location]!=' ') return 'collision';
 	
-	b=game.board.split('');
-	b[i]=v;
-	var pts=cleardead(game,b,game.turn);
+	boardA=game.board.split('');
+	boardA[location]=team;
+	var pts=cleardead(boardA,game.size,game.turn);
 	if(pts<0) return 'suicide';
-	if(checkko(game,b)) return 'ko';
+	if(checkko(game,boardA)) return 'ko';
 	
 	game.turn=='w' ? game.wkills+=pts : game.bkills+=pts;
-	game.board=b.join('');
-	game.moved({i:i,v:v});
+	game.board=boardA.join('');
+	game.moved({i:location,v:team});
 	game.pass=0;
-	if(game.qmark)
+	if(game.mark)
 	{
-		var newq=game.qmark.split('');
-		for(var i in newq)
-			if(b[i]==' ')
-				newq[i]=' ';
-		game.qmark=newq.join('');
+		var markA=game.mark.split('');
+		for(var i=0;i<game.size*game.size;i++)
+			if(boardA[i]==' ')
+				markA[i]=' ';
+		game.mark=markA.join('');
 	}
 	return undefined;
 }
 
-function trypass(game,v)
+function trypass(game,team)
 {
-	if(game.turn!==v) return 'turn';
+	if(team!=='w' && team!=='b') return 'invalid';
+	if(game.turn!=team) return 'turn';
 	if(game.pass>=2) return 'turn';
 	
 	game.turn=='w' ? game.bkills++ : game.wkills++;
 	game.moved({pass:1,v:game.turn});
 	game.pass++;
 	if(game.pass==2)
-		delete game.qmark;
+		delete game.mark;
 	return undefined;
 }
 
-function trymark(game,v,mark)
+function trymark(game,team,mark)
 {
-	if(v!='w' && v!='b') return 'invalid';
+	if(team!=='w' && team!=='b') return 'invalid';
 	if(!isstr(mark) || mark.length!=game.size*game.size) return 'invalid';
 	if(game.pass!=2) return 'turn';
 	
-	if(v=='w' && !game.wmark)
+	if(team=='w' && !game.wmark)
 		game.wmark=mark;
-	else if(v=='b' && !game.bmark)
+	else if(team=='b' && !game.bmark)
 		game.bmark=mark;
 	else
 		return 'turn';
 	if(game.wmark && game.bmark)
 	{
-		var valid=1;
-		for(var i=0;i<game.wmark.length;i++)
-			if('bw '.indexOf(game.wmark[i])<0)
-				valid=0;
-		if(game.wmark==game.bmark && valid)
+		var markA=game.wmark.split('');
+		for(var i in markA)
+			if(game.bmark[i]!=game.wmark[i] || !contains('d ',game.wmark[i]))
+				markA[i]='?';
+		game.mark=markA.join('');
+		if(!contains(game.mark,'?'))
 		{
-			game.mark=game.wmark;
-			if(game.turn=='w') 
+			if(game.turn=='w')
 				game.bkills++;
 			delete game.turn;
-		}
-		else
-		{
-			var newq=game.wmark.split('');
-			for(var i in newq)
-				if(game.bmark[i]!=game.wmark[i] || 'bw '.indexOf(game.wmark[i])<0)
-					newq[i]='?';
-			game.qmark=newq.join('');
 		}
 		game.pass=0;
 		delete game.bmark;
@@ -230,7 +246,7 @@ function trymark(game,v,mark)
 }
 
 app.listen(1369);
-function handler(req,res) { res.writeHead(200); res.end('alive'); }
+function handler(request,response) { response.writeHead(200); response.end('alive'); }
 
 io.on('connection', function(socket) {
 	socket.on('get', function(data) {
