@@ -132,14 +132,14 @@ function cleardead(boardA,size,turn)
 	var liberties=lib_static;
 	groupcount(boardA,size,groups,liberties);
 	var points=0;
-	for(var o in [1,-1])
+	for(var o=0;o<2;o++)
 	{
 		turn=opp(turn);
 		for(var i=0;i<size*size;i++)
 			if(boardA[i]==turn && liberties[groups[i]]==0)
 				 boardA[i]=' ',points++;
 		if(points>0)
-			return points*o;
+			return points*[-1,1][o];
 	}
 	return 0;
 }
@@ -263,6 +263,7 @@ io.on('connection', function(socket) {
 		getgame(socket,id,function(game) {
 			if(!game) return;
 			var err=trymove(game,data.i,data.v);
+			if(err) console.log(err);
 			savegame(id,game);
 			io.to(id).emit('game', {game:get(game,sendkeys), err:err});
 		});
@@ -273,6 +274,7 @@ io.on('connection', function(socket) {
 		getgame(socket,id,function(game) {
 			if(!game) return;
 			var err=trypass(game,data.v);
+			if(err) console.log(err);
 			savegame(id,game);
 			io.to(id).emit('game', {game:get(game,sendkeys), err:err});	  
 		});
@@ -283,6 +285,7 @@ io.on('connection', function(socket) {
 		getgame(socket,id,function(game) {
 			if(!game) return;
 			var err=trymark(game,data.v,data.mark);
+			if(err) console.log(err);
 			savegame(id,game);
 			io.to(id).emit('game', {game:get(game,sendkeys), err:err});
 		});
