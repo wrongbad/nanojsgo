@@ -139,7 +139,7 @@ function cleardead(boardA,size,turn)
 			if(boardA[i]==turn && liberties[groups[i]]==0)
 				 boardA[i]=' ',points++;
 		if(points>0)
-			return points*[-1,1][o];
+			return points*[1,-1][o];
 	}
 	return 0;
 }
