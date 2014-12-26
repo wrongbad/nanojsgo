@@ -188,13 +188,13 @@ function trymove(game,location,team)
 	game.board=boardA.join('');
 	game.moved({i:location,v:team});
 	game.pass=0;
-	if(game.mark)
+	if(game.qmark)
 	{
-		var markA=game.mark.split('');
+		var qmarkA=game.qmark.split('');
 		for(var i=0;i<game.size*game.size;i++)
 			if(boardA[i]==' ')
-				markA[i]=' ';
-		game.mark=markA.join('');
+				qmarkA[i]=' ';
+		game.qmark=qmarkA.join('');
 	}
 	return undefined;
 }
